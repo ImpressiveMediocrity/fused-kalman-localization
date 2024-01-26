@@ -36,6 +36,7 @@ class LinearPredictorProvider(PredictorProvider):
 
     def predict(self, state, covariance, dt):
         return self.point_prop(state, dt), self.linear_prop_mat(state, dt) @ covariance @ self.linear_prop_mat(state, dt).T + self.process_noise
+        #final prediction
 
 class UnscentedPredictorProvider(PredictorProvider):
     def __init__(self, process_noise, noise_lerp, num_states, alpha=1e-3, beta=2, kappa=1):
@@ -53,13 +54,17 @@ class UnscentedPredictorProvider(PredictorProvider):
         sigma_points, mean_weights, cov_weights = self.sigma_generator.sigma_points(state, covariance)
 
         x_prime = self.point_prop(sigma_points, dt)
+        #3b posterior_cov = (posterior_cov + posterior_cov.T) / 2
+        #our nonlinear state transition function is prop point
 
         mean = mean_weights @ x_prime.T
+        #3c
 
         dev = x_prime - mean[:, np.newaxis]
 
         # could also be calculated with appropriately configured weighted covariance calc
         covariance = np.einsum('w,iw,jw->ij', cov_weights, dev, dev) + self.process_noise
+        #3d
 
 
         return mean, covariance

@@ -31,6 +31,8 @@ class LinearCorrectorProvider(CorrectorProvider):
         return self.linear_obs_mat(state) @ state
 
     def correct(self, state, covariance, measurement, predictor_provider: PredictorProvider):
+        #pretty sure this is standard kalman rather than unscented
+
         obs_mat = self.linear_obs_mat(state)
         pred_measure_cov = obs_mat @ covariance @ obs_mat.T
 
@@ -60,29 +62,39 @@ class UnscentedCorrectorProvider(CorrectorProvider):
         sigma_points, mean_weights, cov_weights = self.sigma_generator.sigma_points(state, covariance)
 
         pred_measurements = self.obs_pred(sigma_points)
+        #2b https://www.mathworks.com/help/control/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html#bvgiw03
 
         mean_measure = mean_weights @ pred_measurements.T
+        
+
         dev = pred_measurements - mean_measure[:, np.newaxis]
 
         raw_cov_measure = np.einsum('w,iw,jw->ij', cov_weights, dev, dev)
         cov_measure = raw_cov_measure + self.measurement_noise
+        #2d? https://www.mathworks.com/help/control/ug/extended-and-unscented-kalman-filter-algorithms-for-online-state-estimation.html#bvgiw03
 
         sigma_dev = sigma_points - state[:, np.newaxis]
 
         cross_cov = np.einsum('w,iw,jw->ij', cov_weights, sigma_dev, dev)
+        #2e
 
         kalman_gain = cross_cov @ np.linalg.inv(cov_measure)
+        #2f
 
         posterior_x = state + kalman_gain @ (measurement - mean_measure)
         posterior_cov = covariance - kalman_gain @ cov_measure @ kalman_gain.T
+        #calculate final values
 
         # AUKF: Exponential moving average of measurement noise estimate
         innovation = measurement - mean_measure
+        #innovation is the delta between the predicted and measured values
         residual = measurement - self.obs_pred(posterior_x[:, np.newaxis]) # This could be replaced with a sigma point weighted calc
 
         self.update_measurement_noise(residual, raw_cov_measure)
+        #moving average of measurement error
         predictor_provider.update_process_noise(innovation, kalman_gain)
-
+        #moving avg of process error
         posterior_cov = (posterior_cov + posterior_cov.T) / 2
+        #keep covarience symetric like it theoretically should be
 
         return posterior_x, posterior_cov
