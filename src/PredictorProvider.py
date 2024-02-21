@@ -61,6 +61,7 @@ class UnscentedPredictorProvider(PredictorProvider):
         #3c
 
         dev = x_prime - mean[:, np.newaxis]
+        #newaxis jut flips the matrix on its side
 
         # could also be calculated with appropriately configured weighted covariance calc
         covariance = np.einsum('w,iw,jw->ij', cov_weights, dev, dev) + self.process_noise
